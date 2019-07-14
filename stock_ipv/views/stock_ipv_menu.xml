@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!-- Stock IPV Menu  -->
+    <menuitem id="stock_ipv_menu"
+              name="Control de IPV"
+              groups="ipv_group_manager,ipv_group_user"  />
+
+    <!-- Action to open the Book list -->
+    <act_window id="action_stock_ipv"
+                name="Stock ipv"
+                res_model="stock.ipv"
+                view_mode="tree,form" />
+
+    <!-- Menu item to open the Book list -->
+    <menuitem id="menu_stock_ipv"
+              name="Registros"
+              parent="stock_ipv_menu"
+              action="action_stock_ipv"/>
+
+</odoo>

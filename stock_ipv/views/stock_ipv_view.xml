@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+
+    <!--<record id="view_search_ipv" model="ir.ui.view">
+        <field name="name">IPV Filters</field>
+        <field name="model">ipv</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="create_uid"/>
+                <filter name="filter_state"
+                        string="Open"
+                        domain="[('state','in',['open'])]"/>
+                <filter name="filter_draft"
+                        string="Draft"
+                        domain="[('state','in',['draft'])]"/>
+                <filter name="group_user" string="Por Resposable" context="{'group_by': 'create_uid'}"/>
+            </search>
+        </field>
+    </record> -->
+
+    <record id="view_tree_stock_ipv" model="ir.ui.view">
+        <field name="name">Stock Ipv Tree</field>
+        <field name="model">stock.ipv</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="requested_by"/>
+                <field name="location_id"/>
+                <field name="state"/>
+            </tree>
+        </field>
+
+    </record>
+
+    <record id="view_form_stock_ipv" model="ir.ui.view">
+        <field name="name">Stock IPV Form</field>
+        <field name="model">stock.ipv</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <field name="show_mark_as_todo" invisible="1"/>
+                    <field name="show_check_availability" invisible="1"/>
+                    <field name="show_validate" invisible="1"/>
+                    <button name="action_assign"
+                            attrs="{'invisible': [('show_check_availability', '=', False)]}"
+                            string="Check Availability"
+                            type="object"
+                            class="oe_highlight"
+                            groups=""/>
+
+                    <button name="action_confirm"
+                            type="object"
+                            attrs="{'invisible': [('show_mark_as_todo', '=', False)]}"
+                            string="Mark to Do"
+                            class="oe_highlight"/>
+                    <button name="button_validate"
+                            attrs="{'invisible': ['|', ('state', 'in', ('waiting','confirmed')), ('show_validate', '=', False)]}"
+                            string="Validate"
+                            type="object"
+                            class="oe_highlight"
+                            groups="stock.group_stock_user"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group name="group_top">
+                        <field name="requested_by"/>
+                        <field name="location_id"/>
+                        <field name="location_dest_id"/>
+                    </group>
+                    <notebook>
+                        <page name="Product" string="Product to Sales">
+                            <field name="move_lines">
+                                <tree editable="bottom">
+                                    <field name="product_id" domain="[('type', 'in', ['product']), ('available_in_pos', '=', True)]"/>
+                                    <field name="stock_location_init_qty"/>
+                                    <field name="product_uom_qty"/>
+                                    <field name="reserved_availability"/>
+                                    <field name="quantity_done"/>
+                                    <field name="product_uom"/>
+                                    <field name="state"/>
+                                </tree>
+
+                            </field>
+                        </page>
+                    </notebook>
+
+
+                </sheet>
+            </form>
+
+        </field>
+
+    </record>
+</odoo>

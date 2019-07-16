@@ -41,6 +41,13 @@
                     <field name="show_mark_as_todo" invisible="1"/>
                     <field name="show_check_availability" invisible="1"/>
                     <field name="show_validate" invisible="1"/>
+
+                    <button name="action_confirm"
+                            type="object"
+                            attrs="{'invisible': [('show_mark_as_todo', '=', False)]}"
+                            string="Mark to Do"
+                            class="oe_highlight"/>
+
                     <button name="action_assign"
                             attrs="{'invisible': [('show_check_availability', '=', False)]}"
                             string="Check Availability"
@@ -48,36 +55,39 @@
                             class="oe_highlight"
                             groups=""/>
 
-                    <button name="action_confirm"
-                            type="object"
-                            attrs="{'invisible': [('show_mark_as_todo', '=', False)]}"
-                            string="Mark to Do"
-                            class="oe_highlight"/>
+
                     <button name="button_validate"
                             attrs="{'invisible': ['|', ('state', 'in', ('waiting','confirmed')), ('show_validate', '=', False)]}"
                             string="Validate"
                             type="object"
                             class="oe_highlight"
-                            groups="stock.group_stock_user"/>
+                            groups=""/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
                     <group name="group_top">
-                        <field name="requested_by"/>
-                        <field name="location_id"/>
-                        <field name="location_dest_id"/>
+                        <group name="group-left">
+                            <field name="requested_by"/>
+                            <field name="location_id"/>
+                            <field name="location_dest_id"/>
+                        </group>
+                        <group name="group-right">
+
+                        </group>
+
                     </group>
                     <notebook>
-                        <page name="Product" string="Product to Sales">
-                            <field name="move_lines">
+                        <page name="Products" string="Product to Sales">
+                            <field name="ipv_lines">
                                 <tree editable="bottom">
-                                    <field name="product_id" domain="[('type', 'in', ['product']), ('available_in_pos', '=', True)]"/>
+                                    <field name="product_id" required="1"
+                                           domain="[('type', 'in', ['product']), ('available_in_pos', '=', True)]"/>
+                                    <field name="product_uom"/>
                                     <field name="stock_location_init_qty"/>
                                     <field name="product_uom_qty"/>
-                                    <field name="reserved_availability"/>
-                                    <field name="quantity_done"/>
-                                    <field name="product_uom"/>
-                                    <field name="state"/>
+                                    <field name="reserved_availability" attrs="{'column_invisible': [('parent.state', 'not in', ['assigned'])]}"/>
+                                    <field name="state" attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>
+
                                 </tree>
 
                             </field>

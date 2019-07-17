@@ -24,7 +24,7 @@ class StockIpv(models.Model):
                 ipvl = self.env['stock.ipv.line'].create({
                     'product_id': product_id.id
                 })
-                res['ipv_lines'] += ipvl.id
+                res['ipv_lines'] = [ipvl.id]
 
         return res
 
@@ -136,7 +136,7 @@ class StockIpv(models.Model):
                 for ipvl in ipv.ipv_lines
             )
             ipv.show_check_availability = ipv.is_locked and ipv.state in (
-            'confirmed', 'waiting', 'assigned') and has_moves_to_reserve
+                'confirmed', 'waiting', 'assigned') and has_moves_to_reserve
 
     @api.multi
     @api.depends('state', 'is_locked')
@@ -155,7 +155,7 @@ class StockIpv(models.Model):
             vals['name'] = self.env['ir.sequence'].next_by_code('stock.ipv.seq')
         res = super().create(vals)
         return res
-    
+
     def unlink(self):
         for ipv in self:
             if ipv.state not in ['draft', 'cancel']:
@@ -188,16 +188,16 @@ class StockIpv(models.Model):
         @return: True
         """
         # TDE FIXME: remove decorator when migration the remaining
-        todo_moves = self.mapped('move_lines').filtered(
+        todo_moves = self.ipv_lines.mapped('move_id').filtered(
             lambda move: move.state in ['draft', 'waiting', 'partially_available', 'assigned', 'confirmed'])
 
         # Check if there are ops not linked to moves yet
-        for pick in self:
-            move_line_ids = pick.move_lines.mapped(lambda m: m._get_move_lines())
+        for ipv in self:
+            move_line_ids = ipv.ipv_lines.mapped('move_id.move_line_ids')
 
             for ops in move_line_ids.filtered(lambda x: not x.move_id):
                 # Search move with this product
-                moves = pick.move_lines.filtered(lambda x: x.product_id == ops.product_id)
+                moves = ipv.ipv_lines.mapped('move_id').filtered(lambda x: x.product_id == ops.product_id)
                 moves = sorted(moves, key=lambda m: m.quantity_done < m.product_qty, reverse=True)
                 if moves:
                     ops.move_id = moves[0].id
@@ -207,10 +207,10 @@ class StockIpv(models.Model):
                         'product_id': ops.product_id.id,
                         'product_uom_qty': ops.qty_done,
                         'product_uom': ops.product_uom_id.id,
-                        'location_id': pick.location_id.id,
-                        'location_dest_id': pick.location_dest_id.id,
-                        'picking_id': pick.id,
-                        'picking_type_id': pick.picking_type_id.id,
+                        'location_id': ipv.location_id.id,
+                        'location_dest_id': ipv.location_dest_id.id,
+                        'picking_id': ipv.id,
+                        'picking_type_id': ipv.picking_type_id.id,
                     })
                     ops.move_id = new_move.id
                     new_move._action_confirm()
@@ -223,8 +223,9 @@ class StockIpv(models.Model):
     @api.multi
     def button_validate(self):
         self.ensure_one()
-        move_line_ids = self.ipv_lines.mapped(lambda m: m._get_move_lines())
-        if not self.move_lines and not move_line_ids:
+        move_lines = self.ipv_lines.mapped('move_id')
+        move_line_ids = move_lines.mapped('move_line_ids')
+        if not move_lines and not move_line_ids:
             raise UserError('Please add some items to move.')
 
         precision_digits = self.env['decimal.precision'].precision_get('Product Unit of Measure')
@@ -236,11 +237,9 @@ class StockIpv(models.Model):
         if no_reserved_quantities and no_quantities_done:
             raise UserError(
                 'You cannot validate a transfer if no quantites are reserved nor done. To force the transfer, switch in edit more and encode the done quantities.')
-
         if no_quantities_done:
-            for move in self.move_lines:
-                for move_line in move.move_line_ids:
-                    move_line.qty_done = move_line.product_uom_qty
+            for move_line in move_line_ids:
+                move_line.qty_done = move_line.product_uom_qty
         self.action_done()
         return
 
@@ -253,6 +252,7 @@ class StockIpvLine(models.Model):
                              string='Ipv Reference')
 
     move_id = fields.Many2one('stock.move')
+
     stock_location_init_qty = fields.Float('Init Stock',
                                            compute='_compute_stock_location_init_qty',
                                            readonly=True)
@@ -279,21 +279,12 @@ class StockIpvLine(models.Model):
     def _compute_stock_location_init_qty(self):
         for ipvl in self:
             ipvl.stock_location_init_qty = ipvl.product_id.with_context(
-                                {'location': ipvl.ipv_id.location_dest_id.id}).qty_available
+                {'location': ipvl.ipv_id.location_dest_id.id}).qty_available
 
     @api.model
     def create(self, vals):
         res = super().create(vals)
-        move_tmpl = {
-            'name': res.ipv_id.name or '/',
-            'product_id': res.product_id.id,
-            'product_uom': res.product_uom.id,
-            'product_uom_qty': res.product_uom_qty,
-            'location_id': res.ipv_id.location_id.id,
-            'location_dest_id': res.ipv_id.location_dest_id.id
-        }
-        move = self.env['stock.move'].create(move_tmpl)
-        res.move_id = move
+
         return res
 
     @api.multi
@@ -302,9 +293,19 @@ class StockIpvLine(models.Model):
             ipvl.move_id.unlink()
         return super().unlink()
 
-
     @api.multi
     def action_confirm(self):
+        for ipvl in self:
+            move_tmpl = {
+                'name': ipvl.ipv_id.name,
+                'product_id': ipvl.product_id.id,
+                'product_uom': ipvl.product_uom.id,
+                'product_uom_qty': ipvl.product_uom_qty,
+                'location_id': ipvl.ipv_id.location_id.id,
+                'location_dest_id': ipvl.ipv_id.location_dest_id.id
+            }
+            ipvl.move_id = self.env['stock.move'].create(move_tmpl)
+
         self.mapped('move_id').filtered(lambda move: move.state == 'draft')._action_confirm()
         return True
 
@@ -318,38 +319,8 @@ class StockIpvLine(models.Model):
 
     @api.multi
     def action_done(self):
-        """"Changes picking state to done by processing the Stock Moves of the Picking
-
-        Normally that happens when the button "Done" is pressed on a Picking view.
-        @return: True
-        """
-        # TDE FIXME: remove decorator when migration the remaining
-        todo_moves = self.mapped('move_id').filtered(
-            lambda move: move.state in ['draft', 'waiting', 'partially_available', 'assigned', 'confirmed'])
-
-        # Check if there are ops not linked to moves yet
-        for ipvl in self:
-            move_line_ids = ipvl.move_id.mapped(lambda m: m._get_move_lines())
-
-            for ops in move_line_ids.filtered(lambda x: not x.move_id):
-                # Search move with this product
-                moves = ipvl.move_id.filtered(lambda x: x.product_id == ops.product_id)
-                moves = sorted(moves, key=lambda m: m.quantity_done < m.product_qty, reverse=True)
-                if moves:
-                    ops.move_id = moves[0].id
-                else:
-                    new_move = self.env['stock.move'].create({
-                        'name': 'New Move:' + ops.product_id.display_name,
-                        'product_id': ops.product_id.id,
-                        'product_uom_qty': ops.qty_done,
-                        'product_uom': ops.product_uom_id.id,
-                        'location_id': ipvl.ipv_id.location_id.id,
-                        'location_dest_id': ipvl.ipv_id.location_dest_id.id,
-                    })
-                    ops.move_id = new_move.id
-                    new_move._action_confirm()
-                    todo_moves |= new_move
-                    # 'qty_done': ops.qty_done})
-        todo_moves._action_done()
-        self.write({'date_done': fields.Datetime.now()})
         return True
+
+    @api.multi
+    def action_validate(self):
+        self.action_done()

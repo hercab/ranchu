@@ -19,12 +19,15 @@ class StockIpv(models.Model):
             res['location_dest_id'] = location_dest.id
             Quant = self.env['stock.quant']
             product_ids = location_dest.quant_ids.mapped('product_id')
+            temp_ipvl = []
             for product_id in product_ids:
                 available_quantity = Quant._get_available_quantity(product_id, location_dest)
                 ipvl = self.env['stock.ipv.line'].create({
-                    'product_id': product_id.id
+                    'product_id': product_id.id,
+                    'is_locked': True
                 })
-                res['ipv_lines'] = [ipvl.id]
+                temp_ipvl += [ipvl.id]
+            res['ipv_lines'] = temp_ipvl
 
         return res
 
@@ -55,21 +58,22 @@ class StockIpv(models.Model):
 
     state = fields.Selection([
         ('draft', 'Draft'),
-        ('waiting', 'Waiting Another Operation'),
-        ('confirmed', 'Waiting'),
-        ('assigned', 'Ready'),
-        ('done', 'Done'),
+        ('check', 'Check'),
+        ('assign', 'Ready'),
+        ('open', 'Open'),
+        ('close', 'Close'),
         ('cancel', 'Cancelled'),
     ], string='Status', compute='_compute_state',
         copy=False, index=True, readonly=True, store=True, track_visibility='onchange',
-        help=" * Draft: not confirmed yet and will not be scheduled until confirmed.\n"
-             " * Waiting Another Operation: waiting for another move to proceed before it becomes automatically available (e.g. in Make-To-Order flows).\n"
-             " * Waiting: if it is not ready to be sent because the required products could not be reserved.\n"
-             " * Ready: products are reserved and ready to be sent. If the shipping policy is 'As soon as possible' this happens as soon as anything is reserved.\n"
-             " * Done: has been processed, can't be modified or cancelled anymore.\n"
-             " * Cancelled: has been cancelled, can't be confirmed anymore.")
+        help=" * Draft: No ha sido confirmado.\n"
+             " * Ready: Chequeado disponibilidad y reservada las cantidades, listo para ser abierto.\n"
+             " * Open: Las cantidades han sido movidas, no hay retorno, se puede agregar mas cantidades y productos.\n"
+             " * Close: Esta bloqueado y no se puede editar mas.\n")
 
     ipv_lines = fields.One2many('stock.ipv.line', 'ipv_id')
+
+    move_raw_ids = fields.One2many('stock.move',
+                                   compute='_compute_move_raw_ids')
 
     show_check_availability = fields.Boolean(
         compute='_compute_show_check_availability',
@@ -87,6 +91,10 @@ class StockIpv(models.Model):
     date_done = fields.Datetime('Date of Transfer', copy=False, readonly=True,
                                 help="Date at which the transfer has been processed or cancelled.")
 
+    @api.depends('ipv_lines')
+    def _compute_move_raw_ids(self):
+        self.move_raw_ids = self.ipv_lines.mapped('move_raw_ids')
+
     @api.depends('ipv_lines.state')
     def _compute_state(self):
         ''' State of a picking depends on the state of its related stock.move
@@ -101,20 +109,16 @@ class StockIpv(models.Model):
         - Done: if the picking is done.
         - Cancelled: if the picking is cancelled '''
 
-        if not self.ipv_lines or not self.mapped('ipv_lines.move_id'):
+        if not self.ipv_lines:
             self.state = 'draft'
         elif any(ipvl.state == 'draft' for ipvl in self.ipv_lines):  # TDE FIXME: should be all ?
             self.state = 'draft'
-        elif all(ipvl.state == 'cancel' for ipvl in self.ipv_lines):
-            self.state = 'cancel'
-        elif all(ipvl.state in ['cancel', 'done'] for ipvl in self.ipv_lines):
-            self.state = 'done'
+        elif all(ipvl.state in ['done'] for ipvl in self.ipv_lines):
+            self.state = 'open'
+        elif all(ipvl.state in ['|', 'assigned', 'partially_available'] for ipvl in self.ipv_lines):
+            self.state = 'assign'
         else:
-            relevant_move_state = self.ipv_lines.mapped('move_id')._get_relevant_state_among_moves()
-            if relevant_move_state == 'partially_available':
-                self.state = 'assigned'
-            else:
-                self.state = relevant_move_state
+            self.state = 'check'
 
     @api.multi
     @api.depends('ipv_lines.state')
@@ -130,13 +134,11 @@ class StockIpv(models.Model):
     @api.multi
     def _compute_show_check_availability(self):
         for ipv in self:
-            has_moves_to_reserve = any(
-                ipvl.state in ('waiting', 'confirmed', 'partially_available') and
-                float_compare(ipvl.product_uom_qty, 0, precision_rounding=ipvl.product_uom.rounding)
-                for ipvl in ipv.ipv_lines
-            )
+            has_moves_to_reserve = any(float_compare(ipvl.product_uom_qty, 0, precision_rounding=ipvl.product_uom.rounding)
+                                       for ipvl in ipv.ipv_lines
+                                       )
             ipv.show_check_availability = ipv.is_locked and ipv.state in (
-                'confirmed', 'waiting', 'assigned') and has_moves_to_reserve
+                'draft', 'check') and has_moves_to_reserve
 
     @api.multi
     @api.depends('state', 'is_locked')
@@ -144,7 +146,7 @@ class StockIpv(models.Model):
         for ipv in self:
             if ipv.state == 'draft':
                 ipv.show_validate = False
-            elif ipv.state not in ('draft', 'waiting', 'confirmed', 'assigned') or not ipv.is_locked:
+            elif ipv.state not in ('assign'):
                 ipv.show_validate = False
             else:
                 ipv.show_validate = True
@@ -159,7 +161,7 @@ class StockIpv(models.Model):
     def unlink(self):
         for ipv in self:
             if ipv.state not in ['draft', 'cancel']:
-                raise UserError('Para borrar un ipv tiene que cancelarlo primero.')
+                raise UserError('No puede borrar un IPV que no este cancelado.')
             ipv.mapped('ipv_lines').unlink()
         return super(StockIpv, self).unlink()
 
@@ -188,34 +190,9 @@ class StockIpv(models.Model):
         @return: True
         """
         # TDE FIXME: remove decorator when migration the remaining
-        todo_moves = self.ipv_lines.mapped('move_id').filtered(
+        todo_moves = self.ipv_lines.mapped(lambda s: s.move_id or s.move_raw_ids).filtered(
             lambda move: move.state in ['draft', 'waiting', 'partially_available', 'assigned', 'confirmed'])
 
-        # Check if there are ops not linked to moves yet
-        for ipv in self:
-            move_line_ids = ipv.ipv_lines.mapped('move_id.move_line_ids')
-
-            for ops in move_line_ids.filtered(lambda x: not x.move_id):
-                # Search move with this product
-                moves = ipv.ipv_lines.mapped('move_id').filtered(lambda x: x.product_id == ops.product_id)
-                moves = sorted(moves, key=lambda m: m.quantity_done < m.product_qty, reverse=True)
-                if moves:
-                    ops.move_id = moves[0].id
-                else:
-                    new_move = self.env['stock.move'].create({
-                        'name': 'New Move:' + ops.product_id.display_name,
-                        'product_id': ops.product_id.id,
-                        'product_uom_qty': ops.qty_done,
-                        'product_uom': ops.product_uom_id.id,
-                        'location_id': ipv.location_id.id,
-                        'location_dest_id': ipv.location_dest_id.id,
-                        'picking_id': ipv.id,
-                        'picking_type_id': ipv.picking_type_id.id,
-                    })
-                    ops.move_id = new_move.id
-                    new_move._action_confirm()
-                    todo_moves |= new_move
-                    # 'qty_done': ops.qty_done})
         todo_moves._action_done()
         self.write({'date_done': fields.Datetime.now()})
         return True
@@ -223,7 +200,7 @@ class StockIpv(models.Model):
     @api.multi
     def button_validate(self):
         self.ensure_one()
-        move_lines = self.ipv_lines.mapped('move_id')
+        move_lines = self.ipv_lines.mapped(lambda s: s.move_id or s.move_raw_ids)
         move_line_ids = move_lines.mapped('move_line_ids')
         if not move_lines and not move_line_ids:
             raise UserError('Please add some items to move.')
@@ -253,7 +230,11 @@ class StockIpvLine(models.Model):
 
     move_id = fields.Many2one('stock.move')
 
-    stock_location_init_qty = fields.Float('Init Stock',
+    move_raw_ids = fields.One2many(comodel_name='stock.move',
+                                   inverse_name='ipvl_raw_material_id',
+                                   string='Raw Material Moves')
+
+    stock_location_init_qty = fields.Float('In Stock',
                                            compute='_compute_stock_location_init_qty',
                                            readonly=True)
 
@@ -262,7 +243,15 @@ class StockIpvLine(models.Model):
                                  store=True,
                                  readonly=False)
 
-    state = fields.Selection(related="move_id.state", store=True)
+    state = fields.Selection([
+        ('draft', 'Draft'),
+        ('waiting', 'Waiting Another Operation'),
+        ('confirmed', 'Waiting'),
+        ('assigned', 'Ready'),
+        ('done', 'Done'),
+        ('cancel', 'Cancelled'),
+    ], compute="_compute_state",
+        readonly=True)
 
     # related fields to stock.move
     product_uom_qty = fields.Float(string='Demanda Inicial',
@@ -274,12 +263,74 @@ class StockIpvLine(models.Model):
     reserved_availability = fields.Float(related='move_id.reserved_availability', store=True)
     availability = fields.Float(related='move_id.availability')
     product_qty = fields.Float(related='move_id.product_qty')
+    string_availability_info = fields.Text('Availability',
+                                           related='move_id.string_availability_info')
+    is_locked = fields.Boolean(compute='_compute_is_locked', readonly=True)
+    is_initial_demand_editable = fields.Boolean('Is initial demanda editable',
+                                                related='move_id.is_initial_demand_editable',
+                                                )
+    is_manufactured = fields.Boolean('Is manufacture', compute="_compute_is_manufactured", store=True)
+    has_moves = fields.Boolean('Has move?', computed='_compute_has_moves')
 
     @api.depends('product_id', 'ipv_id.location_dest_id')
     def _compute_stock_location_init_qty(self):
         for ipvl in self:
             ipvl.stock_location_init_qty = ipvl.product_id.with_context(
                 {'location': ipvl.ipv_id.location_dest_id.id}).qty_available
+
+    @api.model
+    def _compute_is_locked(self):
+        for ipvl in self:
+            if ipvl.ipv_id:
+                ipvl.is_locked = ipvl.ipv_id.is_locked
+
+    @api.depends('product_id')
+    def _compute_is_manufactured(self):
+        for ipvl in self:
+            if ipvl.product_id.bom_count:
+                ipvl.is_manufactured = True
+            else:
+                ipvl.is_manufactured = False
+
+    @api.depends('move_raw_ids', 'move_id')
+    def _compute_has_moves(self):
+        for ipvl in self:
+            ipvl.has_moves = bool(ipvl.move_line_ids) or bool(ipvl.move_raw_ids)
+
+    @api.depends('move_raw_ids.state', 'move_id.state')
+    def _compute_state(self):
+        for ipvl in self:
+            if ipvl.is_manufactured:
+                ''' State of a picking depends on the state of its related stock.move
+                        - Draft: only used for "planned pickings"
+                        - Waiting: if the picking is not ready to be sent so if
+                          - (a) no quantity could be reserved at all or if
+                          - (b) some quantities could be reserved and the shipping policy is "deliver all at once"
+                        - Waiting another move: if the picking is waiting for another move
+                        - Ready: if the picking is ready to be sent so if:
+                          - (a) all quantities are reserved or if
+                          - (b) some quantities could be reserved and the shipping policy is "as soon as possible"
+                        - Done: if the picking is done.
+                        - Cancelled: if the picking is cancelled
+                        '''
+                if not ipvl.move_raw_ids:
+                    ipvl.state = 'draft'
+                elif any(move.state == 'draft' for move in ipvl.move_raw_ids):  # TDE FIXME: should be all ?
+                    ipvl.state = 'draft'
+                elif all(move.state == 'cancel' for move in ipvl.move_raw_ids):
+                    ipvl.state = 'cancel'
+                elif all(move.state in ['cancel', 'done'] for move in ipvl.move_raw_ids):
+                    ipvl.state = 'done'
+                else:
+                    relevant_move_state = ipvl.move_raw_ids._get_relevant_state_among_moves()
+                    if relevant_move_state == 'partially_available':
+                        ipvl.state = 'assigned'
+                    else:
+                        ipvl.state = relevant_move_state
+            elif ipvl.move_id:
+                ipvl.state = ipvl.move_id.state
+            else:
+                ipvl.state = 'draft'
 
     @api.model
     def create(self, vals):
@@ -296,22 +347,75 @@ class StockIpvLine(models.Model):
     @api.multi
     def action_confirm(self):
         for ipvl in self:
-            move_tmpl = {
-                'name': ipvl.ipv_id.name,
-                'product_id': ipvl.product_id.id,
-                'product_uom': ipvl.product_uom.id,
-                'product_uom_qty': ipvl.product_uom_qty,
-                'location_id': ipvl.ipv_id.location_id.id,
-                'location_dest_id': ipvl.ipv_id.location_dest_id.id
-            }
-            ipvl.move_id = self.env['stock.move'].create(move_tmpl)
+            if ipvl.is_manufactured and not ipvl.move_raw_ids:
+                bom = self.env['mrp.bom']._bom_find(product=ipvl.product_id)
 
-        self.mapped('move_id').filtered(lambda move: move.state == 'draft')._action_confirm()
+                factor = ipvl.product_uom._compute_quantity(ipvl.product_uom_qty, bom.product_uom_id) / bom.product_qty
+                boms, lines = bom.explode(ipvl.product_id, factor)
+
+                ipvl.move_raw_ids = ipvl._generate_raw_moves(lines)
+                # Check for all draft moves whether they are mto or not
+                # production._adjust_procure_method()
+                ipvl.move_raw_ids._action_confirm()
+            elif not ipvl.is_manufactured and not ipvl.move_id:
+                move_tmpl = {
+                    'name': ipvl.ipv_id.name,
+                    'product_id': ipvl.product_id.id,
+                    'product_uom': ipvl.product_uom.id,
+                    'product_uom_qty': ipvl.product_uom_qty,
+                    'location_id': ipvl.ipv_id.location_id.id,
+                    'location_dest_id': ipvl.ipv_id.location_dest_id.id
+                    }
+                ipvl.move_id = self.env['stock.move'].create(move_tmpl)
+                self.mapped('move_id').filtered(lambda move: move.state == 'draft')._action_confirm()
         return True
+
+    def _generate_raw_moves(self, exploded_lines):
+        self.ensure_one()
+        moves = self.env['stock.move']
+        for bom_line, line_data in exploded_lines:
+            moves += self._generate_raw_move(bom_line, line_data)
+        return moves
+
+    def _generate_raw_move(self, bom_line, line_data):
+        quantity = line_data['qty']
+        # alt_op needed for the case when you explode phantom bom and all the lines will be consumed in the operation given by the parent bom line
+        alt_op = line_data['parent_line'] and line_data['parent_line'].operation_id.id or False
+        if bom_line.child_bom_id and bom_line.child_bom_id.type == 'phantom':
+            return self.env['stock.move']
+        if bom_line.product_id.type not in ['product', 'consu']:
+            return self.env['stock.move']
+
+        # original_quantity = (self.product_qty - self.qty_produced) or 1.0
+        data = {
+            'sequence': bom_line.sequence,
+            'name': self.ipv_id.name,
+            # 'date': self.date_planned_start,
+            # 'date_expected': self.date_planned_start,
+            'bom_line_id': bom_line.id,
+            # 'picking_type_id': self.picking_type_id.id,
+            'product_id': bom_line.product_id.id,
+            'product_uom_qty': quantity,
+            'product_uom': bom_line.product_uom_id.id,
+            'location_id': self.ipv_id.location_id.id,
+            'location_dest_id': self.ipv_id.location_dest_id.id,
+            # 'raw_material_production_id': self.id,
+            # 'company_id': self.company_id.id,
+            'operation_id': bom_line.operation_id.id or alt_op,
+            'price_unit': bom_line.product_id.standard_price,
+            'procure_method': 'make_to_stock',
+            # 'origin': self.name,
+            'warehouse_id': self.ipv_id.location_id.get_warehouse().id,
+            # 'group_id': self.procurement_group_id.id,
+            # 'propagate': self.propagate,
+            # 'unit_factor': quantity / original_quantity,
+        }
+        return self.env['stock.move'].create(data)
 
     @api.multi
     def action_assign(self):
         moves_to_check = self.mapped('move_id').filtered(lambda move: move.state not in ('draft', 'cancel', 'done'))
+        moves_to_check += self.mapped('move_raw_ids').filtered(lambda move: move.state not in ('draft', 'cancel', 'done'))
         if not moves_to_check:
             raise UserError('Nothing to check the availability for.')
         for move in moves_to_check:

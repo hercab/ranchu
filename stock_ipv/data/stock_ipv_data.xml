@@ -10,5 +10,12 @@
             <field name="company_id" eval="False"/>
         </record>
 
+        <record id="ipv_location_destiny" model="stock.location">
+            <field name="name">Elaboration</field>
+            <field name="usage">internal</field>
+            <field name="location_id" model="stock.location"
+                eval="obj().env.ref('stock.warehouse0').view_location_id.id"/>
+        </record>
+
     </data>
 </odoo>

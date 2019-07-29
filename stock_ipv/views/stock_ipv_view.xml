@@ -22,10 +22,11 @@
         <field name="name">Stock Ipv Tree</field>
         <field name="model">stock.ipv</field>
         <field name="arch" type="xml">
-            <tree>
+            <tree decoration-success="state in ['open']" decoration-info="state in ['draft']"
+                  decoration-muted="state in ['close']">
                 <field name="name"/>
-                <field name="requested_by"/>
-                <field name="location_id"/>
+                <field name="date_open"/>
+                <field name="date_close"/>
                 <field name="state"/>
             </tree>
         </field>
@@ -38,15 +39,8 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <field name="show_mark_as_todo" invisible="1"/>
                     <field name="show_check_availability" invisible="1"/>
                     <field name="show_validate" invisible="1"/>
-
-                    <!--<button name="action_confirm"
-                            type="object"
-                            attrs="{'invisible': [('show_mark_as_todo', '=', False)]}"
-                            string="Mark to Do"
-                            class="oe_highlight"/>-->
 
                     <button name="action_assign"
                             attrs="{'invisible': [('show_check_availability', '=', False)]}"
@@ -62,7 +56,14 @@
                             type="object"
                             class="oe_highlight"
                             groups=""/>
-                    <field name="state" widget="statusbar"/>
+                    <button name="button_close"
+                            attrs=""
+                            states="open"
+                            string="Close"
+                            type="object"
+                            class="oe_highlight"
+                            groups=""/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,open,close"/>
                 </header>
                 <sheet>
                     <group name="group_top">
@@ -70,9 +71,11 @@
                             <field name="requested_by"/>
                             <field name="location_id"/>
                             <field name="location_dest_id"/>
+
                         </group>
                         <group name="group-right">
-
+                            <field name="date_open" attrs="{'invisible': [('state', 'not in', ['open', 'close'])]}"/>
+                            <field name="date_close" attrs="{'invisible': [('state', 'not in', ['close'])]}"/>
                         </group>
 
                     </group>
@@ -81,28 +84,28 @@
                             <field name="is_locked" invisible="1"/>
                             <field name="ipv_lines" attrs="{'readonly': [('is_locked', '=', True), ('state', '=', 'done')]}">
                                 <tree editable="bottom">
+                                    <field name="has_moves" invisible="1"/>
                                     <field name="is_locked" invisible="1"/>
                                     <field name="is_manufactured" invisible="1"/>
-                                    <field name="is_initial_demand_editable" invisible="1"/>
                                     <field name="product_id" required="1"
                                            domain="[('type', 'in', ['product']), ('available_in_pos', '=', True)]"/>
                                     <field name="product_uom"/>
-                                    <field name="stock_location_init_qty"/>
+                                    <field name="initial_stock_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="on_hand_qty"/>
                                     <field name="product_uom_qty" attrs=""/>
-                                    <field name="reserved_availability" attrs="{'column_invisible': [('parent.state', 'not in', ['assigned'])]}"/>
-                                    <field name="state" attrs=""/>
+                                    <field name="consumed_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="state" attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>
                                 </tree>
 
                             </field>
                         </page>
                         <page name="Raw_Material" string="Raw Materials">
-                            <field name="move_raw_ids">
+                            <field name="raw_quants">
                                 <tree>
+                                    <field name="location_id"/>
                                     <field name="product_id"/>
-                                    <field name="product_qty"/>
-                                    <field name="reserved_availability" attrs=""/>
-                                    <field name="quantity_done"/>
-                                    <field name="state"/>
+                                    <field name="quantity" attrs=""/>
+                                    <field name="reserved_quantity"/>
                                 </tree>
                             </field>
                         </page>

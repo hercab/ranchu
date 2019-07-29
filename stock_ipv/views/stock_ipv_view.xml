@@ -99,6 +99,7 @@
 
                             </field>
                         </page>
+
                         <page name="Raw_Material" string="Raw Materials">
                             <field name="raw_quants">
                                 <tree>

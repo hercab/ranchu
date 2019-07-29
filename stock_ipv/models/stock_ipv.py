@@ -23,7 +23,6 @@ class StockIpv(models.Model):
                 if sublocation.quant_ids:
                     ipvl = self.env['stock.ipv.line'].create({
                         'product_id': product.id,
-                        'is_locked': True
                     })
                     temp_ipvl += [ipvl.id]
                 if sublocation.usage == 'production':
@@ -213,13 +212,21 @@ class StockIpv(models.Model):
 class StockIpvLine(models.Model):
     _name = 'stock.ipv.line'
     _description = 'Ipv Line'
+    _parent_store = True
 
     ipv_id = fields.Many2one('stock.ipv',
                              string='Ipv Reference')
 
+    parent_id = fields.Many2one('stock.ipv.line', 'Parent IPV line', ondelete='restrict')
+
+    parent_path = fields.Char(index=True)
+
+    child_ids = fields.One2many('stock.ipv.line', 'parent_id', 'Raw Material lines',
+                                compute='_compute_child_ids')
+
     move_ids = fields.One2many(comodel_name='stock.move',
-                                   inverse_name='ipvl_id',
-                                   string='Ipvl Moves')
+                               inverse_name='ipvl_id',
+                               string='Ipvl Moves')
 
     on_hand_qty = fields.Float('On Hand',
                                compute='_compute_on_hand_qty',
@@ -261,11 +268,16 @@ class StockIpvLine(models.Model):
     is_manufactured = fields.Boolean('Is manufacture', compute="_compute_is_manufactured", store=True)
     has_moves = fields.Boolean('Has move?', compute='_compute_has_moves')
 
-    @api.depends('product_id')
+    @api.depends('product_id', 'ipv_id.location_dest_id')
     def _compute_sublocation(self):
         for ipvl in self:
+            if ipvl.parent_id:
+                location = ipvl.parent_id.sublocation_id
+            else:
+                location = ipvl.ipv_id.location_dest_id
+
             sublocation = self.env['stock.location'].search(['&', ('name', '=', ipvl.product_id.name),
-                                                                 ('location_id', '=', ipvl.ipv_id.location_dest_id.id)])
+                                                                  ('location_id', '=', location.id)])
             if sublocation:
                 ipvl.sublocation_id = sublocation
 
@@ -273,8 +285,21 @@ class StockIpvLine(models.Model):
                 ipvl.sublocation_id = self.env['stock.location'].create({
                         'name': ipvl.product_id.name,
                         'usage': 'production' if ipvl.is_manufactured else 'transit',
-                        'location_id': ipvl.ipv_id.location_dest_id.id,
+                        'location_id': location.id,
                     })
+
+    @api.depends('product_id')
+    def _compute_child_ids(self):
+        for ipvl in self:
+            if ipvl.is_manufactured:
+                bom = self.env['mrp.bom']._bom_find(product=ipvl.product_id)
+                ipvls = []
+                for boml in bom.bom_line_ids:
+                    ipvls += [{
+                        'parent_id': ipvl.id,
+                        'product_id': boml.product_id.id,
+                    }]
+                ipvl.child_ids = self.env['stock.ipv.line'].create(ipvls)
 
     @api.depends('product_id', 'ipv_id.location_dest_id')
     def _compute_on_hand_qty(self):
@@ -292,7 +317,7 @@ class StockIpvLine(models.Model):
 
             else:
                 ipvl.on_hand_qty = ipvl.product_id.with_context(
-                    {'location': ipvl.ipv_id.location_dest_id.id}).qty_available
+                    {'location': ipvl.sublocation_id.id}).qty_available
 
     @api.depends('on_hand_qty')
     def _compute_consumed_qty(self):
@@ -347,13 +372,6 @@ class StockIpvLine(models.Model):
                         ipvl.state = 'assigned'
                     else:
                         ipvl.state = relevant_move_state
-
-    @api.model
-    def create(self, vals):
-
-        new_ipvl = super().create(vals)
-
-        return new_ipvl
 
     @api.multi
     def unlink(self):

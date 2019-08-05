@@ -18,8 +18,8 @@
         </field>
     </record> -->
 
-    <record id="view_tree_stock_ipv" model="ir.ui.view">
-        <field name="name">Stock Ipv Tree</field>
+    <record id="view_tree_ipv" model="ir.ui.view">
+        <field name="name">Ipv List</field>
         <field name="model">stock.ipv</field>
         <field name="arch" type="xml">
             <tree decoration-success="state in ['open']" decoration-info="state in ['draft']"
@@ -33,8 +33,8 @@
 
     </record>
 
-    <record id="view_form_stock_ipv" model="ir.ui.view">
-        <field name="name">Stock IPV Form</field>
+    <record id="view_form_ipv" model="ir.ui.view">
+        <field name="name">IPV Form</field>
         <field name="model">stock.ipv</field>
         <field name="arch" type="xml">
             <form>
@@ -80,35 +80,54 @@
 
                     </group>
                     <notebook>
-                        <page name="Products" string="Product to Sales">
+                        <page name="Products" string="Lista de Productos">
                             <field name="is_locked" invisible="1"/>
-                            <field name="ipv_lines" attrs="{'readonly': [('is_locked', '=', True), ('state', '=', 'done')]}">
+                            <field name="ipv_lines"
+                                   attrs="{'readonly': [('is_locked', '=', True), ('state', '=', 'done')]}">
                                 <tree editable="bottom">
                                     <field name="has_moves" invisible="1"/>
                                     <field name="is_locked" invisible="1"/>
-                                    <field name="is_manufactured" invisible="1"/>
-                                    <field name="product_id" required="1"
-                                           domain="[('type', 'in', ['product']), ('available_in_pos', '=', True)]"/>
+                                    <field name="product_id" string="Producto Final"/>
+                                    <field name="child_ids" invisible="1">
+                                        <tree>
+                                            <field name="parent_id"/>
+                                            <field name="product_id"/>
+                                            <field name="product_uom"/>
+                                            <field name="initial_stock_qty"/>
+                                            <field name="on_hand_qty"/>
+                                            <field name="request_qty" attrs=""/>
+                                            <field name="consumed_qty"/>
+                                            <field name="state"/>
+                                        </tree>
+                                    </field>
                                     <field name="product_uom"/>
-                                    <field name="initial_stock_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="initial_stock_qty"
+                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                                     <field name="on_hand_qty"/>
-                                    <field name="product_uom_qty" attrs=""/>
-                                    <field name="consumed_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
-                                    <field name="state" attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>
+                                    <field name="request_qty" attrs=""/>
+                                    <field name="consumed_qty"
+                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="state"
+                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>
                                 </tree>
 
-                            </field>
-                        </page>
 
-                        <page name="Raw_Material" string="Raw Materials">
-                            <field name="raw_quants">
+                            </field>
+                            <field name="raw_lines">
                                 <tree>
-                                    <field name="location_id"/>
-                                    <field name="product_id"/>
-                                    <field name="quantity" attrs=""/>
-                                    <field name="reserved_quantity"/>
+                                    <field name="display_name" string="Materias Primas"/>
+                                    <field name="product_uom"/>
+                                    <field name="initial_stock_qty"
+                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="on_hand_qty"/>
+                                    <field name="request_qty" attrs=""/>
+                                    <field name="consumed_qty"
+                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="state"
+                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>
                                 </tree>
                             </field>
+
                         </page>
                     </notebook>
 
@@ -118,5 +137,21 @@
 
         </field>
 
+    </record>
+
+    <record id="view_tree_ipv_line" model="ir.ui.view">
+        <field name="name">IPV line List</field>
+        <field name="model">stock.ipv.line</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="product_id"/>
+                <field name="product_uom"/>
+                <field name="initial_stock_qty"/>
+                <field name="on_hand_qty"/>
+                <field name="request_qty" attrs=""/>
+                <field name="consumed_qty"/>
+                <field name="state"/>
+            </tree>
+        </field>
     </record>
 </odoo>

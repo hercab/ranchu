@@ -10,27 +10,10 @@ class StockIpv(models.Model):
     _description = 'Stock IPV'
     _order = 'create_date desc'
 
-    # @api.model
-    # def default_get(self, fields):
-    #     res = super(StockIpv, self).default_get(fields)
-    #     if 'location_dest_id' in res:
-    #         location_dest = self.env['stock.location'].browse([res['location_dest_id']])
-    #         # Quant = self.env['stock.quant']
-    #         sublocations = location_dest.child_ids
-    #         temp_ipvl = []
-    #         for sublocation in sublocations:
-    #             product = self.env['product.product'].search([('name', '=', sublocation.name)], limit=1)
-    #             if sublocation.quant_ids:
-    #                 temp_ipvl += [{
-    #                     'product_id': product.id,
-    #                 }]
-    #
-    #             # available_quantity = Quant._get_available_quantity(product, sublocation)
-    #         if temp_ipvl:
-    #             ipvls = self.env['stock.ipv.line'].create(temp_ipvl)
-    #             res['ipv_lines'] = ipvls.mapped('id')
-    #
-    #     return res
+    @api.model
+    def default_get(self, fields):
+        res = super(StockIpv, self).default_get(fields)
+        return res
 
     name = fields.Char(required=True, copy=False, default='New')
 
@@ -74,9 +57,7 @@ class StockIpv(models.Model):
     ipv_lines = fields.One2many('stock.ipv.line', 'ipv_id')
 
     raw_lines = fields.One2many('stock.ipv.line',
-                                compute='_compute_raw_lines',
-                                readonly=True
-                                )
+                                compute='_compute_raw_lines')
 
     show_check_availability = fields.Boolean(
         compute='_compute_show_check_availability',
@@ -84,6 +65,10 @@ class StockIpv(models.Model):
 
     show_validate = fields.Boolean(
         compute='_compute_show_validate',
+        help='Technical field used to compute whether the validate should be shown.')
+
+    show_open = fields.Boolean(
+        compute='_compute_show_open',
         help='Technical field used to compute whether the validate should be shown.')
     is_locked = fields.Boolean(default=True, help='When the picking is not done this allows changing the '
                                                   'initial demand. When the picking is done this allows '
@@ -99,9 +84,32 @@ class StockIpv(models.Model):
     def _compute_raw_lines(self):
         self.raw_lines = self.ipv_lines.mapped('child_ids')
 
-    # @api.onchange('ipv_lines')
-    # def _compute_child_lines(self):
-    #     self.raw_lines.update({'ipv_id': self.id})
+    @api.onchange('location_dest_id')
+    def _compute_child_lines(self):
+        dest = self.location_dest_id
+        IPVl = self.env['stock.ipv.line']
+        # Quant = self.env['stock.quant']
+        sublocations = dest.child_ids
+        self.ipv_lines = []
+        for sublocation in sublocations:
+            product = self.env['product.product'].search([('name', '=', sublocation.name)], limit=1)
+
+            if sublocation.quant_ids:
+                data = {
+                    'ipv_id': self.id,
+                    'product_id': product.id,
+                    'child_ids': []
+                }
+                if sublocation.usage == 'production':
+                    childs = []
+                    for quant in sublocation.quant_ids:
+                        childs.append((0, 0, {
+                            # 'ipv_id': self,
+                            # 'parent_id': ,
+                            'product_id': quant.product_id
+                        }))
+                        data['child_ids'] = childs
+                IPVl.new(data)
 
     @api.depends('ipv_lines.state')
     def _compute_state(self):
@@ -143,12 +151,22 @@ class StockIpv(models.Model):
     @api.depends('state', 'is_locked')
     def _compute_show_validate(self):
         for ipv in self:
-            if ipv.state == 'draft':
-                ipv.show_validate = False
-            elif ipv.state not in ('check', 'assign', 'open'):
+            if ipv.state not in ('check', 'assign', 'open'):
                 ipv.show_validate = False
             else:
                 ipv.show_validate = True
+
+    @api.multi
+    @api.depends('state', 'is_locked')
+    def _compute_show_open(self):
+        self.ensure_one()
+        has_lines_to_sale = any(float_compare(ipvl.on_hand_qty, 0, precision_rounding=ipvl.product_uom.rounding)
+                                   # and ipvl.state not in ['assigned', 'done']
+                                   for ipvl in self.ipv_lines
+                                )
+
+        self.show_open = self.is_locked and self.state in (
+                'draft', 'assign') and has_lines_to_sale
 
     @api.model
     def create(self, vals):
@@ -187,9 +205,8 @@ class StockIpv(models.Model):
         Normally that happens when the button "Done" is pressed on a Picking view.
         @return: True
         """
-        self.ipv_lines.action_done()
-
-        self.write({'date_done': fields.Datetime.now()})
+        all_lines = self.ipv_lines | self.raw_lines
+        all_lines.action_done()
         return True
 
     @api.multi
@@ -200,8 +217,17 @@ class StockIpv(models.Model):
     @api.multi
     def button_validate(self):
         self.ensure_one()
-        self.ipv_lines.action_validate()
+        all_lines = self.ipv_lines | self.raw_lines
+        all_lines.action_validate()
         self.action_done()
+        return True
+
+    @api.multi
+    def button_open(self):
+        self.ensure_one()
+        if self.show_validate:
+            self.button_validate()
+        self.write({'date_done': fields.Datetime.now()})
         return True
 
     @api.multi
@@ -278,12 +304,18 @@ class StockIpvLine(models.Model):
     def _compute_sublocation(self):
 
         for ipvl in self:
+
             if ipvl.parent_id:
                 ipvl.sublocation_id = ipvl.parent_id.sublocation_id
-            elif ipvl:
-                ipvl.sublocation_id = self.env['stock.location'].search(['&', ('name', '=', ipvl.product_id.name),
-                                                                        ('location_id', '=', ipvl.ipv_id.location_dest_id.id),
-                                                                         ])
+                continue
+            elif ipvl.ipv_id:
+                location_id = ipvl.ipv_id.location_dest_id
+
+            else:
+                location_id = self.env.ref('stock_ipv.ipv_location_destiny')
+
+            ipvl.sublocation_id = self.env['stock.location'].search(['&', ('name', '=', ipvl.product_id.name),
+                                                                     ('location_id', '=', location_id.id)])
 
     @api.depends('product_id')
     def _compute_is_manufactured(self):
@@ -298,17 +330,16 @@ class StockIpvLine(models.Model):
             return result
         self.child_ids = []
         if self.is_manufactured:
-
             bom = self.env['mrp.bom']._bom_find(product=self.product_id)
-            # raw_ipvls = []
+            childs = []
             for boml in bom.bom_line_ids:
-                raw = {
-                    'ipv_id': self.ipv_id.id,
-                    'parent_id': self.id,
+                data = {
+                    # 'ipv_id': self.ipv_id.id,
+                    # 'parent_id': self.id,
                     'product_id': boml.product_id.id,
-                    'sublocation_id': self.sublocation_id.id,
                 }
-                self.child_ids += self.new(raw)
+                childs.append((0, 0, data))
+            self.upate({'child_ids': childs})
 
     @api.depends('product_id')
     def _compute_on_hand_qty(self):
@@ -319,9 +350,10 @@ class StockIpvLine(models.Model):
             if ipvl.is_manufactured:
                 bom = self.env['mrp.bom']._bom_find(product=ipvl.product_id)
                 availability = []
-                for raw in ipvl.child_ids:
-                    boml_qty = bom.bom_line_ids.filtered(lambda s: s.product_id == raw.product_id).product_qty
-                    available_qty = bom.product_qty * raw.on_hand_qty / boml_qty
+                for boml in bom.bom_line_ids:
+                    boml_qty = boml.product_qty
+                    available_boml = boml.product_id.with_context({'location': ipvl.sublocation_id.id}).qty_available
+                    available_qty = bom.product_qty * available_boml / boml_qty
                     available_qty_uom = bom.product_uom_id._compute_quantity(available_qty, ipvl.product_uom)
                     availability += [available_qty_uom]
 
@@ -384,20 +416,26 @@ class StockIpvLine(models.Model):
                     - Done: if the picking is done.
                     - Cancelled: if the picking is cancelled
                     '''
-            if not ipvl.move_ids:
-                ipvl.state = 'draft'
-            elif any(move.state == 'draft' for move in ipvl.move_ids):  # TDE FIXME: should be all ?
-                ipvl.state = 'draft'
-            elif all(move.state == 'cancel' for move in ipvl.move_ids):
-                ipvl.state = 'cancel'
-            elif all(move.state in ['cancel', 'done'] for move in ipvl.move_ids):
-                ipvl.state = 'done'
-            else:
-                relevant_move_state = ipvl.move_ids._get_relevant_state_among_moves()
-                if relevant_move_state == 'partially_available':
-                    ipvl.state = 'assigned'
+            if ipvl.is_manufactured:
+                moves = ipvl.child_ids.mapped('move_ids')
+                if not moves:
+                    ipvl.state = 'draft'
+                elif any(move.state == 'draft' for move in moves):  # TDE FIXME: should be all ?
+                    ipvl.state = 'draft'
+                elif all(move.state == 'cancel' for move in moves):
+                    ipvl.state = 'cancel'
+                elif all(move.state in ['cancel', 'done'] for move in moves):
+                    ipvl.state = 'done'
                 else:
-                    ipvl.state = relevant_move_state
+                    relevant_move_state = moves._get_relevant_state_among_moves()
+                    if relevant_move_state == 'partially_available':
+                        ipvl.state = 'assigned'
+                    else:
+                        ipvl.state = relevant_move_state
+            elif not ipvl.move_ids:
+                ipvl.state = 'draft'
+            else:
+                ipvl.state = ipvl.move_ids.state
 
     @api.constrains('parent_id')
     def _check_hierarchy(self):
@@ -407,18 +445,8 @@ class StockIpvLine(models.Model):
 
     @api.model
     def create(self, vals):
-        ipvl = super().create(vals)
-        # if ipvl.is_manufactured:
-        #     bom = self.env['mrp.bom']._bom_find(product=ipvl.product_id)
-        #     raw_ipvl = []
-        #     for boml in bom.bom_line_ids:
-        #         raw_ipvl += [{
-        #             'ipv_id': ipvl.ipv_id.id,
-        #             'parent_id': ipvl.id,
-        #             'product_id': boml.product_id.id,
-        #         }]
-        #     ipvl.create(raw_ipvl)
-        return ipvl
+        res = super().create(vals)
+        return res
 
     @api.multi
     def action_confirm(self):
@@ -501,6 +529,7 @@ class StockIpvLine(models.Model):
 
     @api.multi
     def action_validate(self):
+
         move_lines = self.mapped('move_ids')
         move_line_ids = move_lines.mapped('move_line_ids')
         if not move_lines and not move_line_ids:

@@ -41,12 +41,20 @@
                 <header>
                     <field name="show_check_availability" invisible="1"/>
                     <field name="show_validate" invisible="1"/>
+                    <field name="show_open" invisible="1"/>
 
                     <button name="action_assign"
                             attrs="{'invisible': [('show_check_availability', '=', False)]}"
                             string="Check Availability"
                             type="object"
                             class="oe_highlight"
+                            groups=""/>
+
+                    <button name="button_open"
+                            attrs="{'invisible': [('show_open', '=', False)]}"
+                            string="Open"
+                            type="object"
+                            class=""
                             groups=""/>
 
 
@@ -107,9 +115,14 @@
                                     <field name="request_qty" attrs=""/>
                                     <field name="consumed_qty"
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
-                                    <field name="state"
-                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>
+                                    <field name="state"/>
+                                    <!--                                    <field name="state"-->
+<!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
                                 </tree>
+                                <form string="Linea de Producto">
+                                    <field name="display_name"/>
+                                    <field name="child_ids"/>
+                                </form>
 
 
                             </field>
@@ -123,8 +136,9 @@
                                     <field name="request_qty" attrs=""/>
                                     <field name="consumed_qty"
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
-                                    <field name="state"
-                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>
+                                    <field name="state"/>
+                                    <!--                                    <field name="state"-->
+<!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
                                 </tree>
                             </field>
 

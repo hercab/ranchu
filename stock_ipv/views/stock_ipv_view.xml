@@ -92,22 +92,19 @@
                             <field name="is_locked" invisible="1"/>
                             <field name="ipv_lines"
                                    attrs="{'readonly': [('is_locked', '=', True), ('state', '=', 'done')]}">
+
                                 <tree editable="bottom">
+                                    <field name="child_ids" invisible="1">
+                                        <tree>
+                                            <field name="product_id"/>
+                                            <field name="state"/>
+                                        </tree>
+
+                                    </field>
+                                    <!-- Necesario para computar el child_ids en el onchange-->
                                     <field name="has_moves" invisible="1"/>
                                     <field name="is_locked" invisible="1"/>
                                     <field name="product_id" string="Producto Final"/>
-                                    <field name="child_ids" invisible="1">
-                                        <tree>
-                                            <field name="parent_id"/>
-                                            <field name="product_id"/>
-                                            <field name="product_uom"/>
-                                            <field name="initial_stock_qty"/>
-                                            <field name="on_hand_qty"/>
-                                            <field name="request_qty" attrs=""/>
-                                            <field name="consumed_qty"/>
-                                            <field name="state"/>
-                                        </tree>
-                                    </field>
                                     <field name="product_uom"/>
                                     <field name="initial_stock_qty"
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
@@ -117,14 +114,8 @@
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                                     <field name="state"/>
                                     <!--                                    <field name="state"-->
-<!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
+                                    <!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
                                 </tree>
-                                <form string="Linea de Producto">
-                                    <field name="display_name"/>
-                                    <field name="child_ids"/>
-                                </form>
-
-
                             </field>
                             <field name="raw_lines">
                                 <tree>
@@ -138,7 +129,7 @@
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                                     <field name="state"/>
                                     <!--                                    <field name="state"-->
-<!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
+                                    <!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
                                 </tree>
                             </field>
 

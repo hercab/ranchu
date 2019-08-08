@@ -57,7 +57,8 @@ class StockIpv(models.Model):
     ipv_lines = fields.One2many('stock.ipv.line', 'ipv_id')
 
     raw_lines = fields.One2many('stock.ipv.line',
-                                compute='_compute_raw_lines')
+                                compute='_compute_raw_lines',
+                                )
 
     show_check_availability = fields.Boolean(
         compute='_compute_show_check_availability',
@@ -101,15 +102,12 @@ class StockIpv(models.Model):
                     'child_ids': []
                 }
                 if sublocation.usage == 'production':
-                    childs = []
                     for quant in sublocation.quant_ids:
-                        childs.append((0, 0, {
-                            # 'ipv_id': self,
-                            # 'parent_id': ,
+                        child = {
                             'product_id': quant.product_id
-                        }))
-                        data['child_ids'] = childs
-                IPVl.new(data)
+                        }
+                        data['child_ids'].append((0, 0, child))
+            IPVl.new(data)
 
     @api.depends('ipv_lines.state')
     def _compute_state(self):
@@ -339,7 +337,7 @@ class StockIpvLine(models.Model):
                     'product_id': boml.product_id.id,
                 }
                 childs.append((0, 0, data))
-            self.upate({'child_ids': childs})
+                self.update({'child_ids': childs})
 
     @api.depends('product_id')
     def _compute_on_hand_qty(self):

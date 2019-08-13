@@ -5,13 +5,13 @@
               name="Control de IPV"
               groups="ipv_group_manager,ipv_group_user"  />
 
-    <!-- Action to open the Book list -->
+    <!-- Action to open the IPV list -->
     <act_window id="action_stock_ipv"
                 name="Stock ipv"
                 res_model="stock.ipv"
                 view_mode="tree,form" />
 
-    <!-- Menu item to open the Book list -->
+    <!-- Menu item to open the IPV list -->
     <menuitem id="menu_stock_ipv"
               name="Registros"
               parent="stock_ipv_menu"

@@ -40,7 +40,6 @@
             <form>
                 <header>
                     <field name="show_check_availability" invisible="1"/>
-                    <field name="show_validate" invisible="1"/>
                     <field name="show_open" invisible="1"/>
 
                     <button name="action_assign"
@@ -54,16 +53,9 @@
                             attrs="{'invisible': [('show_open', '=', False)]}"
                             string="Open"
                             type="object"
-                            class=""
-                            groups=""/>
-
-
-                    <button name="button_validate"
-                            attrs="{'invisible': [('show_validate', '=', False)]}"
-                            string="Validate"
-                            type="object"
                             class="oe_highlight"
                             groups=""/>
+
                     <button name="button_close"
                             attrs=""
                             states="open"
@@ -94,14 +86,6 @@
                                    attrs="{'readonly': [('is_locked', '=', True), ('state', '=', 'done')]}">
 
                                 <tree editable="bottom">
-                                    <field name="child_ids" invisible="1">
-                                        <tree>
-                                            <field name="product_id"/>
-                                            <field name="state"/>
-                                        </tree>
-
-                                    </field>
-                                    <!-- Necesario para computar el child_ids en el onchange-->
                                     <field name="has_moves" invisible="1"/>
                                     <field name="is_locked" invisible="1"/>
                                     <field name="product_id" string="Producto Final"/>
@@ -110,33 +94,27 @@
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                                     <field name="on_hand_qty"/>
                                     <field name="request_qty" attrs=""/>
-                                    <field name="consumed_qty"
-                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                                     <field name="state"/>
-                                    <!--                                    <field name="state"-->
-                                    <!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
-                                </tree>
-                            </field>
-                            <field name="raw_lines">
-                                <tree>
-                                    <field name="display_name" string="Materias Primas"/>
-                                    <field name="product_uom"/>
-                                    <field name="initial_stock_qty"
-                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
-                                    <field name="on_hand_qty"/>
-                                    <field name="request_qty" attrs=""/>
-                                    <field name="consumed_qty"
-                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
-                                    <field name="state"/>
-                                    <!--                                    <field name="state"-->
-                                    <!--                                           attrs="{'column_invisible': [('parent.state', 'in', ['draft'])]}"/>-->
+                                    <field name="raw_ids" invisible="1" readonly="0">
+                                        <tree>
+                                            <field name="product_id"/>
+                                            <field name="request_qty"/>
+                                        </tree>
+                                    </field>
                                 </tree>
                             </field>
 
                         </page>
+                        <page name="Raw" string="Raw Materials">
+                            <field name="raw_lines" />
+                        </page>
+                        <page name="Pickings" string="Pickings">
+                            <field name="picking_id"/>
+                        </page>
+                        <page name="Moves" string="Stock Moves">
+                            <field name="move_lines"/>
+                        </page>
                     </notebook>
-
-
                 </sheet>
             </form>
 
@@ -149,14 +127,41 @@
         <field name="model">stock.ipv.line</field>
         <field name="arch" type="xml">
             <tree>
-                <field name="product_id"/>
+                <field name="display_name"/>
                 <field name="product_uom"/>
-                <field name="initial_stock_qty"/>
+                <field name="initial_stock_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                 <field name="on_hand_qty"/>
-                <field name="request_qty" attrs=""/>
+                <field name="request_qty" />
                 <field name="consumed_qty"/>
                 <field name="state"/>
             </tree>
+        </field>
+    </record>
+
+    <record id="view_form_ipv_line" model="ir.ui.view">
+        <field name="name">IPV line Form</field>
+        <field name="model">stock.ipv.line</field>
+        <field name="arch" type="xml">
+            <form>
+                <group name="top_group">
+                    <group name="left">
+                        <field name="display_name"/>
+                        <field name="product_uom"/>
+                        <field name="sublocation_id"/>
+                        <field name="state"/>
+                    </group>
+                    <group name="right">
+                        <field name="initial_stock_qty"/>
+                        <field name="request_qty" attrs=""/>
+                        <field name="on_hand_qty"/>
+                        <field name="consumed_qty"/>
+                    </group>
+                </group>
+<!--                <group name="bottom_group">-->
+<!--                    <field name="raw_ids"/>-->
+<!--                </group>-->
+
+            </form>
         </field>
     </record>
 </odoo>

@@ -19,7 +19,13 @@
             <field name="usage">internal</field>
             <field name="location_id" model="stock.location"
                 eval="obj().env.ref('stock.warehouse0').view_location_id.id"/>
-            <field name="putaway_strategy_id" ref="putaway_strategy_elaboration" />
+        </record>
+        <record id="ipv_picking_type" model="stock.picking.type">
+            <field name="name">Picking IPV</field>
+            <field name="code">internal</field>
+            <field name="sequence_id" ref="stock.seq_picking_internal"/>
+            <field name="default_location_src_id" ref="stock.stock_location_stock"/>
+            <field name="default_location_dest_id" ref="stock_ipv.ipv_location_destiny"/>
         </record>
 
     </data>

@@ -11,10 +11,17 @@
                 res_model="stock.ipv"
                 view_mode="tree,form" />
 
+
     <!-- Menu item to open the IPV list -->
     <menuitem id="menu_stock_ipv"
               name="Registros"
               parent="stock_ipv_menu"
               action="action_stock_ipv"/>
+
+    <act_window id="action_ipv_picking_button"
+                name="Open IPV Picking"
+                res_model="stock.picking"
+                view_mode="tree,form"
+                domain=""/>
 
 </odoo>

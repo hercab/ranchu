@@ -37,6 +37,8 @@ class StockIpv(models.Model):
 
     picking_id = fields.Many2one('stock.picking')
 
+    num_picking = fields.Integer(compute='_compute_num_pickings')
+
     state = fields.Selection([
         ('draft', 'Draft'),
         ('check', 'Check'),
@@ -53,9 +55,10 @@ class StockIpv(models.Model):
 
     ipv_lines = fields.One2many('stock.ipv.line', 'ipv_id')
 
-    raw_lines = fields.One2many('stock.ipv.line', compute='compute_raw_lines')
+    raw_lines = fields.One2many('stock.ipv.line', string="Pure Raw", compute='_compute_raw_lines')
 
-    move_lines = fields.One2many('stock.move', compute='_compute_move_lines', string='Move Lines')
+    # merca_lines = fields.One2many('stock.ipv.line', 'ipv_id',
+    #                               domain=[('raw_ids', '=', False), ('parent_id', '=', False)])
 
     show_check_availability = fields.Boolean(
         compute='_compute_show_check_availability',
@@ -74,48 +77,28 @@ class StockIpv(models.Model):
     date_close = fields.Datetime('Close date', copy=False, readonly=True,
                                  help="Date at which the turn was closed.")
 
-    @api.depends('ipv_lines')
-    def compute_raw_lines(self):
-        self.ensure_one()
-        if not self.ipv_lines:
-            return {}
-        self.raw_lines = self.ipv_lines.mapped('raw_ids')
+    def _compute_num_pickings(self):
+        for ipv in self:
+            ipv.num_picking = len(ipv.picking_id)
 
-    @api.depends('ipv_lines.move_ids', 'raw_lines.move_ids')
-    def _compute_move_lines(self):
-        self.move_lines = (self.ipv_lines + self.raw_lines).mapped('move_ids')
+    def _compute_raw_lines(self):
+        for ipv in self:
+            ipv.raw_lines = ipv.ipv_lines.mapped('raw_ids').merge_raws()
+        return True
 
     @api.onchange('location_dest_id')
     def _compute_child_lines(self):
         dest = self.location_dest_id
-        IPVl = self.env['stock.ipv.line']
+        # IPVl = self.env['stock.ipv.line']
         # Quant = self.env['stock.quant']
-        sublocations = dest.child_ids
-        self.ipv_lines = []
-        ipvls = []
-        for sublocation in sublocations:
-            product = self.env['product.product'].search([('name', '=', sublocation.name)], limit=1)
 
-            if sublocation.quant_ids:
-                data = {
-                    'product_id': product.id,
-                    'raw_ids': []
-                }
+        last_ipvl = self.env['stock.ipv'].search([('state', '=', 'close'),
+                                                 ('location_dest_id', '=', dest.id)], limit=1).ipv_lines
+        if last_ipvl:
+            ipvls_to_copy = (last_ipvl + last_ipvl.mapped('raw_ids')).filtered(lambda ipvl: ipvl.on_hand_qty != 0)
 
-                if sublocation.usage == 'production':
-                    for quant in sublocation.quant_ids:
-                        raw = {
-                            'product_id': quant.product_id.id
-                        }
-                        data['raw_ids'].append((0, 0, raw))
-                ipvls.append((0, 0, data))
-        self.update({'ipv_lines': ipvls})
-
-    # @api.depends('ipv_lines')
-    # def onchange_ipv_lines(self):
-    #     return {'domain': {
-    #         'product_id': [('name', 'not in', self.ipv_lines.mapped('name'))]
-    #     }}
+            for ipvl in ipvls_to_copy:
+                self.ipv_lines += ipvl.copy()
 
     @api.depends('picking_id.state')
     def _compute_state(self):
@@ -139,6 +122,8 @@ class StockIpv(models.Model):
             self.state = 'assign'
         elif self.picking_id.state in ['done']:
             self.state = 'open'
+        elif self.picking_id.state in ['cancel']:
+            self.state = 'cancel'
         else:
             self.state = 'check'
 
@@ -150,14 +135,13 @@ class StockIpv(models.Model):
                                    for ipvl in self.ipv_lines
                                    )
 
-        self.show_check_availability = self.is_locked and self.state not in (
-            'close') and has_moves_to_reserve
+        self.show_check_availability = self.is_locked and self.state not in ['close', 'cancel'] and has_moves_to_reserve
 
     @api.multi
     @api.depends('state', 'is_locked')
     def _compute_show_open(self):
         self.ensure_one()
-        self.show_open = self.is_locked and (self.state in 'assign')
+        self.show_open = self.is_locked and (self.state in ['assign'])
 
     @api.model
     def create(self, vals):
@@ -179,6 +163,7 @@ class StockIpv(models.Model):
 
         if ipvl_confirmed:
             self.picking_id = ipvl_confirmed.mapped('move_ids.picking_id')
+            self.picking_id.write({'move_type': 'one'})
         return True
 
     @api.one
@@ -189,26 +174,24 @@ class StockIpv(models.Model):
         @return: True
         """
         self.filtered(lambda ipv: ipv.state == 'draft').action_confirm()
-
         # Cuando se confirma las movidas se crean los picking asociados
         self.picking_id.action_assign()
         return True
 
     @api.one
     def button_open(self):
-        for move in self.move_lines:
-            if move.is_quantity_done_editable:
-                move.quantity_done = move.product_uom_qty
-            else:
-                for ml in move.move_line_ids:
-                    ml.qty_done = ml.product_uom_qty
-
         self.picking_id.button_validate()
         self.write({
             'state': 'open',
             'date_open': fields.Datetime.now()})
         return True
 
-    @api.multi
+    @api.one
     def button_close(self):
+        self.write({'state': 'close', 'data_close': fields.Datetime.now()})
+        return True
+
+    @api.one
+    def action_cancel(self):
+        self.picking_id.action_cancel()
         return True

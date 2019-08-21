@@ -23,7 +23,7 @@
         <field name="model">stock.ipv</field>
         <field name="arch" type="xml">
             <tree decoration-success="state in ['open']" decoration-info="state in ['draft']"
-                  decoration-muted="state in ['close']">
+                  decoration-muted="state in ['close']" create="">
                 <field name="name"/>
                 <field name="date_open"/>
                 <field name="date_close"/>
@@ -63,9 +63,21 @@
                             type="object"
                             class="oe_highlight"
                             groups=""/>
+                    <button name="action_cancel"
+                            attrs=""
+                            states="check, assign"
+                            string="Cancel"
+                            type="object"
+                            class=""
+                            groups=""/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,open,close"/>
                 </header>
                 <sheet>
+                    <div name="button_box" class="oe_button_box" attrs="{'invisible': [('num_picking', '=', 0)]}">
+                        <button class="oe_stat_button" icon="fa-tasks" help="Link to the picking" type="action" name="%(action_ipv_picking_button)d" context="">
+                            <field string="Picking" name="num_picking" widget="statinfo"/>
+                        </button>
+                    </div>
                     <group name="group_top">
                         <group name="group-left">
                             <field name="requested_by"/>
@@ -85,34 +97,34 @@
                             <field name="ipv_lines"
                                    attrs="{'readonly': [('is_locked', '=', True), ('state', '=', 'done')]}">
 
-                                <tree editable="bottom">
+                                <tree editable="bottom" >
                                     <field name="has_moves" invisible="1"/>
                                     <field name="is_locked" invisible="1"/>
-                                    <field name="product_id" string="Producto Final"/>
+                                    <field name="is_manufactured" invisible="1"/>
+                                    <field name="product_id"/>
+                                    <field name="bom_id" invisible="1"/>
                                     <field name="product_uom"/>
                                     <field name="initial_stock_qty"
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                                     <field name="on_hand_qty"/>
                                     <field name="request_qty" attrs=""/>
                                     <field name="state"/>
-                                    <field name="raw_ids" invisible="1" readonly="0">
-                                        <tree>
-                                            <field name="product_id"/>
-                                            <field name="request_qty"/>
-                                        </tree>
-                                    </field>
                                 </tree>
                             </field>
 
                         </page>
                         <page name="Raw" string="Raw Materials">
-                            <field name="raw_lines" />
-                        </page>
-                        <page name="Pickings" string="Pickings">
-                            <field name="picking_id"/>
-                        </page>
-                        <page name="Moves" string="Stock Moves">
-                            <field name="move_lines"/>
+                            <field name="raw_lines">
+                                <tree>
+                                    <field name="product_id"/>
+                                    <field name="product_uom"/>
+                                    <field name="initial_stock_qty"
+                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="on_hand_qty"/>
+                                    <field name="request_qty"/>
+                                    <field name="consumed_qty"/>
+                                </tree>
+                            </field>
                         </page>
                     </notebook>
                 </sheet>
@@ -127,7 +139,7 @@
         <field name="model">stock.ipv.line</field>
         <field name="arch" type="xml">
             <tree>
-                <field name="display_name"/>
+                <field name="product_id"/>
                 <field name="product_uom"/>
                 <field name="initial_stock_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                 <field name="on_hand_qty"/>
@@ -145,9 +157,8 @@
             <form>
                 <group name="top_group">
                     <group name="left">
-                        <field name="display_name"/>
+                        <field name="product_id"/>
                         <field name="product_uom"/>
-                        <field name="sublocation_id"/>
                         <field name="state"/>
                     </group>
                     <group name="right">
@@ -157,9 +168,9 @@
                         <field name="consumed_qty"/>
                     </group>
                 </group>
-<!--                <group name="bottom_group">-->
-<!--                    <field name="raw_ids"/>-->
-<!--                </group>-->
+                <group name="bottom_group">
+                    <field name="raw_ids" attrs="{'invisible': [('raw_ids', '=', [])]}"/>
+                </group>
 
             </form>
         </field>

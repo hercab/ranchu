@@ -16,7 +16,8 @@
     <menuitem id="menu_stock_ipv"
               name="Registros"
               parent="stock_ipv_menu"
-              action="action_stock_ipv"/>
+              action="action_stock_ipv"
+              sequence="1"/>
 
     <act_window id="action_ipv_picking_button"
                 name="Open IPV Picking"
@@ -24,4 +25,23 @@
                 view_mode="tree,form"
                 domain=""/>
 
+<!--    Work Place Menu-->
+    <act_window id="action_ipv_workplace"
+                name="List Work Place"
+                res_model="ipv.work.place"
+                view_mode="tree,form"
+                domain=""/>
+
+    <menuitem id="menu_ipv_workplace"
+                  name="Work Place"
+                  parent="stock_ipv_menu"
+                  action="action_ipv_workplace"
+                  sequence="2"/>
+
+<!--    Product-->
+    <menuitem id="menu_product_in_ipv"
+              name="Products"
+              parent="stock_ipv_menu"
+              action="product.product_template_action_all"
+              sequence="4"  />
 </odoo>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+<data>
+    <record id="ipv_product_template_form_view" model="ir.ui.view">
+        <field name="name">ipv.product.template.form.inherit</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="stock.view_template_property_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='pricelists']" position="before">
+                <group name="ipv" string="IPV Work Place">
+                    <group>
+                        <field name="workplace_ids" widget="many2many_checkboxes"/>
+                        <field name="elaboration_loc" attrs="{'invisible': [('workplace_ids', '=', [])]}" string="Elaboration Location"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</data>
+</odoo>

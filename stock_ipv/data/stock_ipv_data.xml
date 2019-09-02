@@ -14,8 +14,14 @@
             <field name="name">Elaboration PutAway</field>
         </record>
 
-        <record id="ipv_location_destiny" model="stock.location">
+        <record id="ipv_location_elaboration" model="stock.location">
             <field name="name">Elaboration</field>
+            <field name="usage">internal</field>
+            <field name="location_id" model="stock.location"
+                eval="obj().env.ref('stock.warehouse0').view_location_id.id"/>
+        </record>
+        <record id="ipv_location_sales" model="stock.location">
+            <field name="name">Sales</field>
             <field name="usage">internal</field>
             <field name="location_id" model="stock.location"
                 eval="obj().env.ref('stock.warehouse0').view_location_id.id"/>
@@ -25,7 +31,7 @@
             <field name="code">internal</field>
             <field name="sequence_id" ref="stock.seq_picking_internal"/>
             <field name="default_location_src_id" ref="stock.stock_location_stock"/>
-            <field name="default_location_dest_id" ref="stock_ipv.ipv_location_destiny"/>
+            <field name="default_location_dest_id" ref="stock_ipv.ipv_location_sales"/>
         </record>
 
     </data>

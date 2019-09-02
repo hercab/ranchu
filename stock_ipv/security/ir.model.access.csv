@@ -3,3 +3,5 @@ access_ipv_user,Ipv User Access,model_stock_ipv,ipv_group_user,1,0,0,0
 access_ipv_line_user,Ipv Line User Access,model_stock_ipv_line,ipv_group_user,1,0,0,0
 access_ipv_manager,Ipv Manager Access,model_stock_ipv,ipv_group_manager,1,1,1,1
 access_ipv_line_manager,Ipv Line Manager Access,model_stock_ipv_line,ipv_group_manager,1,1,1,1
+access_ipv_workplace_user,Ipv Workplace User Access,model_ipv_work_place,ipv_group_user,1,0,0,0
+access_ipv_workplace_manager,Ipv Workplace Manager Access,model_ipv_work_place,ipv_group_manager,1,1,1,1

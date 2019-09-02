@@ -25,6 +25,7 @@
             <tree decoration-success="state in ['open']" decoration-info="state in ['draft']"
                   decoration-muted="state in ['close']" create="">
                 <field name="name"/>
+                <field name="workplace_id"/>
                 <field name="date_open"/>
                 <field name="date_close"/>
                 <field name="state"/>
@@ -41,6 +42,7 @@
                 <header>
                     <field name="show_check_availability" invisible="1"/>
                     <field name="show_open" invisible="1"/>
+                    <field name="show_validate" invisible="1"/>
 
                     <button name="action_assign"
                             attrs="{'invisible': [('show_check_availability', '=', False)]}"
@@ -50,10 +52,17 @@
                             groups=""/>
 
                     <button name="button_open"
-                            attrs="{'invisible': [('show_open', '=', False)]}"
+                            attrs="{'invisible': ['|',('show_open', '=', False),('show_check_availability', '=', True)]}"
                             string="Open"
                             type="object"
                             class="oe_highlight"
+                            groups=""/>
+
+                    <button name="action_validate"
+                            attrs="{'invisible': [('show_validate', '=', False)]}"
+                            string="Validate"
+                            type="object"
+                            class=""
                             groups=""/>
 
                     <button name="button_close"
@@ -65,7 +74,7 @@
                             groups=""/>
                     <button name="action_cancel"
                             attrs=""
-                            states="check, assign"
+                            states="check,assign"
                             string="Cancel"
                             type="object"
                             class=""
@@ -73,58 +82,49 @@
                     <field name="state" widget="statusbar" statusbar_visible="draft,open,close"/>
                 </header>
                 <sheet>
-                    <div name="button_box" class="oe_button_box" attrs="{'invisible': [('num_picking', '=', 0)]}">
-                        <button class="oe_stat_button" icon="fa-tasks" help="Link to the picking" type="action" name="%(action_ipv_picking_button)d" context="">
-                            <field string="Picking" name="num_picking" widget="statinfo"/>
+                    <div name="button_box" class="oe_button_box" attrs="{'invisible': [('num_pickings', '=', 0)]}">
+                        <button type="object" name="action_view_ipv_pickings" class="oe_stat_button" icon="fa-truck" attrs="{'invisible': [('num_pickings', '=', 0)]}" groups="base.group_user">
+                            <field string="Picking" name="num_pickings" widget="statinfo"/>
                         </button>
                     </div>
                     <group name="group_top">
                         <group name="group-left">
                             <field name="requested_by"/>
-                            <field name="location_id"/>
-                            <field name="location_dest_id"/>
-
-                        </group>
-                        <group name="group-right">
                             <field name="date_open" attrs="{'invisible': [('state', 'not in', ['open', 'close'])]}"/>
                             <field name="date_close" attrs="{'invisible': [('state', 'not in', ['close'])]}"/>
+                        </group>
+                        <group name="group-right">
+                            <field name="workplace_id"/>
                         </group>
 
                     </group>
                     <notebook>
                         <page name="Products" string="Lista de Productos">
                             <field name="is_locked" invisible="1"/>
-                            <field name="ipv_lines"
-                                   attrs="{'readonly': [('is_locked', '=', True), ('state', '=', 'done')]}">
+                            <field name="saleable_lines"
+                                   attrs="">
 
                                 <tree editable="bottom" >
-                                    <field name="has_moves" invisible="1"/>
-                                    <field name="is_locked" invisible="1"/>
+<!--                                    <field name="has_moves" invisible="1"/>-->
+<!--                                    <field name="is_locked" invisible="1"/>-->
+<!--                                    <field name="is_raw" invisible="0"/>-->
+                                    <field name="saleable_in_pos" invisible="1"/>
                                     <field name="is_manufactured" invisible="1"/>
                                     <field name="product_id"/>
-                                    <field name="bom_id" invisible="1"/>
+                                    <field name="bom_id" invisible="0" options="{'no_create': true}" domain="[('product_tmpl_id', '=', product_id)]"/>
                                     <field name="product_uom"/>
                                     <field name="initial_stock_qty"
                                            attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                                     <field name="on_hand_qty"/>
-                                    <field name="request_qty" attrs=""/>
-                                    <field name="state"/>
+                                    <field name="request_qty" attrs="{'column_invisible': [('parent.state', 'in', ['open', 'close'])]}"/>
+                                    <field name="consumed_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                                    <field name="state" attrs="{'column_invisible': [('parent.state', 'in', ['draft', 'open', 'close'])]}"/>
                                 </tree>
                             </field>
 
                         </page>
                         <page name="Raw" string="Raw Materials">
-                            <field name="raw_lines">
-                                <tree>
-                                    <field name="product_id"/>
-                                    <field name="product_uom"/>
-                                    <field name="initial_stock_qty"
-                                           attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
-                                    <field name="on_hand_qty"/>
-                                    <field name="request_qty"/>
-                                    <field name="consumed_qty"/>
-                                </tree>
-                            </field>
+                            <field name="raw_lines"/>
                         </page>
                     </notebook>
                 </sheet>
@@ -139,13 +139,16 @@
         <field name="model">stock.ipv.line</field>
         <field name="arch" type="xml">
             <tree>
+<!--                <field name="has_moves" invisible="1"/>-->
                 <field name="product_id"/>
+                <field name="elaboration_loc" />
                 <field name="product_uom"/>
                 <field name="initial_stock_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                 <field name="on_hand_qty"/>
                 <field name="request_qty" />
-                <field name="consumed_qty"/>
-                <field name="state"/>
+                <field name="consumed_qty" attrs="{'column_invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
+                <field name="string_availability_info" attrs="{'column_invisible': [('parent.state', 'not in', ['check', 'assign'])]}"/>
+<!--                <field name="state" attrs="{'column_invisible': [('parent.state', 'in', ['draft', 'open', 'close'])]}"/>-->
             </tree>
         </field>
     </record>
@@ -158,18 +161,20 @@
                 <group name="top_group">
                     <group name="left">
                         <field name="product_id"/>
+                        <field name="parent_ids" widget="many2many_tags" attrs="{'invisible': [('parent_ids', '=', [])]}"/>
                         <field name="product_uom"/>
                         <field name="state"/>
                     </group>
                     <group name="right">
-                        <field name="initial_stock_qty"/>
+                        <field name="initial_stock_qty" attrs="{'invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                         <field name="request_qty" attrs=""/>
                         <field name="on_hand_qty"/>
-                        <field name="consumed_qty"/>
+                        <field name="consumed_qty" attrs="{'invisible': [('parent.state', 'not in', ['open', 'close'])]}"/>
                     </group>
                 </group>
                 <group name="bottom_group">
-                    <field name="raw_ids" attrs="{'invisible': [('raw_ids', '=', [])]}"/>
+                    <field name="raw_ids" string="Raw Materials" attrs="{'invisible': [('raw_ids', '=', [])]}"/>
+                    <field name="move_ids" attrs="{'invisible': [('move_ids', '=', [])]}"/>
                 </group>
 
             </form>

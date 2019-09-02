@@ -3,7 +3,7 @@
     'name': "Stock IPV",
 
     'summary': """
-        Gestion de Turnos y IPV""",
+        Gestion de IPV/Turnos""",
 
     'description': """
         Stock IPV
@@ -20,7 +20,7 @@
 
     # any module necessary for this one to work correctly
     'depends': ['stock',
-                'mrp'],
+                'mrp', 'point_of_sale'],
 
     # always loaded
     'data': [
@@ -29,6 +29,7 @@
         'data/stock_ipv_data.xml',
         'views/stock_ipv_menu.xml',
         'views/stock_ipv_view.xml',
+        'views/product_view.xml',
     ],
     # only loaded in demonstration mode
     'demo': [

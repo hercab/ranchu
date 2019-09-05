@@ -29,7 +29,7 @@ class StockIpv(models.Model):
     state = fields.Selection([
         ('draft', 'Draft'),
         ('check', 'Check'),
-        ('assign', 'Ready'),
+        ('ready', 'Ready'),
         ('open', 'Open'),
         ('close', 'Close'),
         ('cancel', 'Cancelled'),
@@ -111,8 +111,8 @@ class StockIpv(models.Model):
                 ipv.state = 'draft'
             elif all(pick.state == 'draft' for pick in ipv.picking_ids):
                 ipv.state = 'draft'
-            elif all(pick.state in ['assigned', 'done'] for pick in ipv.picking_ids):
-                ipv.state = 'assign'
+            elif all(pick.state in ['assigned', 'done', 'draft'] for pick in ipv.picking_ids):
+                ipv.state = 'ready'
             elif all(pick.state == 'cancel' for pick in ipv.picking_ids):
                 ipv.state = 'cancel'
             else:
@@ -128,16 +128,16 @@ class StockIpv(models.Model):
                                  and ipvl.state not in ['assigned', 'done', 'cancel'] for ipvl in self.saleable_lines)
         self.show_check_availability = has_qty_to_reserve or pick_check_availability
 
-    @api.depends('picking_ids.show_validate', 'state')
+    @api.depends('picking_ids.show_validate')
     def _compute_show_validate(self):
         self.ensure_one()
-        self.show_validate = all(pick.show_validate for pick in self.picking_ids) and self.state == 'assign'
+        self.show_validate = any(pick.show_validate for pick in self.picking_ids)
 
     @api.multi
     @api.depends('state', 'is_locked')
     def _compute_show_open(self):
         self.ensure_one()
-        self.show_open = self.is_locked and (self.state in ['assign'])
+        self.show_open = self.is_locked and (self.state in ['ready'])
 
     @api.model
     def create(self, vals):

@@ -51,16 +51,16 @@ class StockIpvLine(models.Model):
 
     saleable_in_pos = fields.Boolean(related='product_id.available_in_pos')
 
-    has_moves = fields.Boolean('Has moves?', compute='_compute_has_moves')
+    has_moves = fields.Boolean('Has moves?', compute='_compute_has_moves', store=True)
 
     move_ids = fields.One2many('stock.move', 'ipvl_id', string='Moves')
 
-    string_availability_info = fields.Text(related='move_ids.string_availability_info')
+    string_availability_info = fields.Text(related='move_ids.string_availability_info', store=True)
 
     initial_stock_qty = fields.Float('Initial Stock', readonly=True, copy=False)
 
     on_hand_qty = fields.Float('On Hand', compute='_compute_on_hand_qty', readonly=False,
-                               help='Cantidad Disponible, En estado draft puede entrar la cantidad que desea tener')
+                               help='Cantidad Disponible, Puede entrar la cantidad total que desea tener a mano')
 
     request_qty = fields.Float(string='Demand', help='Cantidad que desea mover al area de ventas')
 
@@ -100,6 +100,17 @@ class StockIpvLine(models.Model):
                 self.bom_id = False
         else:
             self.bom_id = False
+
+    @api.onchange('on_hand_qty')
+    def onchange_on_hand(self):
+        on_qty = self.on_hand_qty - self._origin.on_hand_qty
+        if on_qty > 0.0:
+            self.request_qty = on_qty
+            self.on_hand_qty = self._origin.on_hand_qty
+        else:
+            self.on_hand_qty = self._origin.on_hand_qty
+            return {'warning': {'title': 'Negative Quantity',
+                                'message': 'You can\'t request quantities bellow the actual'}}
 
     @api.depends('product_id')
     def _compute_on_hand_qty(self):
